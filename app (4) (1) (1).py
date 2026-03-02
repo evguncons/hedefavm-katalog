@@ -3,81 +3,56 @@ import streamlit.components.v1 as components
 import base64
 import os
 
-# 1. Streamlit sayfa ayarlarını yapılandır
-st.set_page_config(
-    page_title="HedefAVM Dijital Katalog",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="HedefAVM Dijital Katalog", layout="wide", initial_sidebar_state="collapsed")
 
-# SİYAH BOŞLUK SORUNUNU ÇÖZEN STREAMLIT CSS AYARLARI
+# STREAMLIT MOBILE SİYAH BOŞLUK ÇÖZÜMÜ
 st.markdown("""
     <style>
-        /* Gereksiz Streamlit menülerini gizle */
+        /* Streamlit Menüleri Gizle */
         #MainMenu {visibility: hidden;}
         header {visibility: hidden;}
         footer {visibility: hidden;}
-        [data-testid="stHeader"] {display: none;}
-        [data-testid="stToolbar"] {display: none;}
         
-        /* Streamlit'in kendi siyah arkaplanını gizlemek için ana rengi değiştiriyoruz */
-        .stApp, .main {
+        /* Arkaplanı renkli yap ve boşlukları sıfırla */
+        .stApp {
             background-color: #f70059 !important;
             background-image: linear-gradient(135deg, #f70059 0%, #ff4d15 100%) !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow: hidden !important;
         }
-        
         .block-container {
-            padding: 0rem !important;
-            margin: 0rem !important;
+            padding: 0 !important;
+            margin: 0 !important;
             max-width: 100% !important;
         }
         
-        /* Iframe'i mobil ekrana %100 kilitleyen, siyah boşlukları engelleyen kod */
-        iframe {
+        /* Iframe Kapsayıcısını ve İframe'in Kendisini Ekranın Tamamına Zorla */
+        [data-testid="stHtml"], iframe {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
             width: 100vw !important;
             height: 100vh !important;
-            height: 100dvh !important; /* Mobil tarayıcılar için dinamik yükseklik */
+            height: 100dvh !important;
             border: none !important;
-            z-index: 999999 !important;
+            z-index: 99999 !important;
             background-color: transparent !important;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. Dosya yolları
+# 2. Dosya Yolları
 pdf_file_path = "dugunpaketi2026.pdf"
 html_file_path = "index.html"
 
-# 3. Dosyaları kontrol et
-if not os.path.exists(pdf_file_path):
-    st.error(f"⚠️ Hata: '{pdf_file_path}' dosyası bulunamadı. Lütfen PDF dosyasını uygulamanın yanına koyun.")
+# Dosya Kontrolleri ve Base64'e Çevirme
+if not os.path.exists(pdf_file_path) or not os.path.exists(html_file_path):
+    st.error("Lütfen PDF ve HTML dosyalarının yan yana olduğundan emin olun.")
     st.stop()
 
-if not os.path.exists(html_file_path):
-    st.error(f"⚠️ Hata: '{html_file_path}' dosyası bulunamadı. Lütfen index.html dosyasını uygulamanın yanına koyun.")
-    st.stop()
-
-# 4. PDF'i Base64 formatına çevir
 with open(pdf_file_path, "rb") as f:
-    base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-    pdf_data_uri = f"data:application/pdf;base64,{base64_pdf}"
+    pdf_data_uri = f"data:application/pdf;base64,{base64.b64encode(f.read()).decode('utf-8')}"
 
-# 5. HTML'i metin olarak oku
 with open(html_file_path, "r", encoding="utf-8") as f:
-    html_code = f.read()
+    html_code = f.read().replace("let DEFAULT_PDF_URL = 'dugunpaketi2026.pdf';", f"let DEFAULT_PDF_URL = '{pdf_data_uri}';")
 
-# HTML içindeki varsayılan dosya adını Base64 verimiz ile değiştir
-html_code = html_code.replace(
-    "let DEFAULT_PDF_URL = 'dugunpaketi2026.pdf';", 
-    f"let DEFAULT_PDF_URL = '{pdf_data_uri}';"
-)
-
-# 6. HTML bileşenini ekrana bas
-# CSS ile 'position: fixed' ve '100dvh' verdiğimiz için height parametresini kaldırarak tam ekran esnekliği sağladık.
+# 3. İframe'i oluştur
 components.html(html_code)
