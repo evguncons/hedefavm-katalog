@@ -138,7 +138,8 @@
     </div>
 
     <!-- Ana İçerik Alanı (Katalog Gövdesi) -->
-    <main class="flex-1 relative flex items-center justify-center overflow-auto w-full h-full pt-20 pb-28 px-4 sm:px-10" id="main-container">
+    <!-- TITREME VE KAYDIRMA SORUNUNU ÇÖZMEK İÇİN OVERFLOW-HIDDEN YAPILDI -->
+    <main class="flex-1 relative flex items-center justify-center overflow-hidden w-full h-full pt-20 pb-28 px-4 sm:px-10" id="main-container">
         
         <!-- Arkaplan Yazısı -->
         <div class="watermark">HedefAVM</div>
@@ -151,7 +152,7 @@
         </div>
 
         <!-- Kitap Sarıcı (Boyut Sınırlandırması İçin) -->
-        <div id="flipbook-wrapper" class="w-[95%] max-w-5xl h-[70vh] max-h-[850px] origin-center z-10 flex justify-center items-center relative">
+        <div id="flipbook-wrapper" class="w-full max-w-5xl h-[70vh] max-h-[850px] origin-center z-10 flex justify-center items-center relative">
             <div id="flipbook" class="flipbook w-full h-full">
                 <!-- Sayfalar JS tarafından buraya eklenecek -->
             </div>
