@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dijital Flipbook</title>
     
     <!-- Tailwind CSS (Tasarım ve Düzen için) -->
@@ -27,6 +27,21 @@
     </script>
 
     <style>
+        /* Mobilde Kaydırma ve Siyah Boşluk Sorununu Çözen Ayarlar */
+        html, body {
+            width: 100%;
+            height: 100%;
+            height: 100dvh; /* Mobil dinamik ekran yüksekliği */
+            margin: 0;
+            padding: 0;
+            overflow: hidden !important;
+            position: fixed; /* Ekranı kilitler, kaymayı engeller */
+            top: 0;
+            left: 0;
+            overscroll-behavior: none; /* Mobildeki sekmeyi (pull-to-refresh) engeller */
+            background-color: #f70059; /* Altta siyah boşluk görünmesini engeller */
+        }
+
         /* Daha Canlı ve Temiz Gradyan Arkaplan */
         .bg-campaign {
             background-color: #f70059; 
@@ -110,7 +125,7 @@
         }
     </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden font-sans text-gray-800 bg-campaign relative">
+<body class="flex flex-col font-sans text-gray-800 bg-campaign relative w-full h-full">
 
     <!-- Üst Header -->
     <header class="bg-black bg-opacity-20 text-white p-3 flex justify-between items-center shadow-md z-20 absolute top-0 left-0 right-0 backdrop-blur-sm border-b border-white border-opacity-10">
