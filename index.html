@@ -29,13 +29,17 @@
     <style>
         /* Streamlit Iframe Uyumluluğu İçin Tam Ekran Ayarları */
         html, body {
-            width: 100%;
-            height: 100%;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important; /* Mobildeki siyah boşluğu önleyen dinamik yükseklik */
             margin: 0;
             padding: 0;
             overflow: hidden !important;
             overscroll-behavior: none;
             background-color: #f70059;
+            position: fixed;
+            top: 0;
+            left: 0;
         }
 
         /* Daha Canlı ve Temiz Gradyan Arkaplan */
