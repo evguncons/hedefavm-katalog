@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dijital Flipbook</title>
+    
+    <!-- Tailwind CSS (Tasarım ve Düzen için) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome (İkonlar için) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            magenta: '#c71a6c', /* Ana Pembe/Magenta */
+                            dark: '#830642',    /* Koyu Mürdüm/Bordo */
+                            light: '#ee4a9b',   /* Açık Fuşya Parlama */
+                            whatsapp: '#25D366'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Streamlit Iframe Uyumluluğu İçin Tam Ekran Ayarları */
+        html, body {
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            margin: 0;
+            padding: 0;
+            overflow: hidden !important;
+            overscroll-behavior: none;
+            background-color: #830642;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        /* Lüks Magenta/Pembe Gradyan Arkaplan ve Işık Efektleri */
+        .bg-campaign {
+            background-color: #c71a6c;
+            background-image: 
+                radial-gradient(ellipse at top left, rgba(238, 74, 155, 0.45) 0%, transparent 60%),
+                radial-gradient(ellipse at bottom right, rgba(131, 6, 66, 0.9) 0%, transparent 70%),
+                linear-gradient(135deg, #c71a6c 0%, #830642 100%);
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        /* Görseldeki gibi çapraz ışık çizgileri (Sweep effect) */
+        .bg-campaign::after {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            /* Çapraz parlama çizgisi */
+            background: linear-gradient(
+                to bottom, 
+                rgba(255,255,255,0) 0%, 
+                rgba(255,255,255,0.02) 45%, 
+                rgba(255,255,255,0.08) 50%, 
+                rgba(255,255,255,0.02) 55%, 
+                rgba(255,255,255,0) 100%
+            );
+            transform: rotate(-12deg);
+            pointer-events: none;
+        }
+
+        /* Kitap ve Sayfa Stilleri */
+        .flipbook {
+            display: none; 
+            border-radius: 4px;
+        }
+        
+        .page {
+            background-color: #ffffff;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1), inset 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        .page.--left {
+            border-right: 1px solid rgba(0,0,0,0.1);
+            box-shadow: inset -15px 0 30px rgba(0,0,0,0.08);
+        }
+        .page.--right {
+            border-left: 1px solid rgba(0,0,0,0.1);
+            box-shadow: inset 15px 0 30px rgba(0,0,0,0.08);
+        }
+
+        .page canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Özel Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1); 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3); 
+            border-radius: 10px;
+        }
+
+        /* Yükleme Animasyonu */
+        .loader {
+            border: 4px solid rgba(255,255,255,0.2);
+            border-bottom-color: #ffffff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* HedefAVM Filigranı */
+        .watermark {
+            position: absolute;
+            bottom: -20px;
+            right: 20px;
+            font-size: clamp(5rem, 10vw, 10rem);
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.04);
+            z-index: 0;
+            pointer-events: none;
+            letter-spacing: -1px;
+        }
+
+        /* Zoom Slider Rengi */
+        input[type=range] {
+            accent-color: #ffffff;
+        }
+
+        /* Mobil Dokunmatik Optimizasyonu */
+        #zoom-overlay {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="font-sans text-gray-800">
+
+    <!-- Dinamik Arkaplan Katmanı -->
+    <div class="bg-campaign"></div>
+
+    <!-- Üst Header -->
+    <header class="bg-black bg-opacity-10 text-white p-2 sm:p-3 flex justify-between items-center shadow-md z-20 absolute top-0 left-0 right-0 backdrop-blur-md border-b border-white border-opacity-10">
+        <div class="font-semibold text-lg tracking-wide flex items-center gap-1 sm:gap-4" id="book-title">
+            <span class="flex items-center gap-1 sm:gap-2 text-[11px] sm:text-base whitespace-nowrap"><i class="fas fa-heart text-white opacity-80"></i> 2026 Düğün Paketleri</span>
+            <div class="bg-black bg-opacity-20 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-[9px] sm:text-sm whitespace-nowrap border border-white border-opacity-10 shadow-inner hidden sm:inline-block">
+                Sayfa <span id="current-page">0</span> / <span id="total-pages">0</span>
+            </div>
+        </div>
+        <div class="flex gap-2 sm:gap-3 items-center">
+            <a href="https://instagram.com/hedefavm" target="_blank" class="bg-black bg-opacity-20 hover:bg-opacity-40 transition px-2 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-sm font-semibold flex items-center gap-1 sm:gap-2 shadow-sm border border-white border-opacity-10">
+                <i class="fab fa-instagram text-white opacity-90 text-sm sm:text-base"></i> <span class="hidden md:inline">İnstagram</span>
+            </a>
+            <a href="https://api.whatsapp.com/send/?phone=905349525687&text=Merhaba, Katalog hakkında ve Elden taksitli alışveriş için bilgi almak istiyorum." target="_blank" class="bg-brand-whatsapp hover:bg-[#1ebe57] text-white transition px-3 sm:px-5 py-2 sm:py-2 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 shadow-[0_0_15px_rgba(37,211,102,0.4)] border border-brand-whatsapp">
+                <i class="fab fa-whatsapp text-white text-base sm:text-lg"></i> 
+                <span class="hidden sm:inline">Bilgi Almak İçin Tıkla</span>
+                <span class="sm:hidden text-xs tracking-wide">Bilgi Al</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Küçük Resimler (Sidebar) -->
+    <div id="sidebar" class="fixed top-0 left-0 h-full w-[85%] max-w-sm sm:w-80 bg-gradient-to-b from-brand-magenta to-brand-dark shadow-2xl z-50 transform -translate-x-full transition-transform duration-300 flex flex-col border-r border-white border-opacity-10">
+        <div class="p-3 sm:p-4 flex justify-between items-center text-white border-b border-white border-opacity-20 bg-black bg-opacity-20 mt-12 sm:mt-16">
+            <h2 class="font-bold text-base sm:text-lg tracking-wide"><i class="fas fa-th-large mr-2 opacity-80"></i> Küçük Resimler</h2>
+            <button id="btn-close-sidebar" class="hover:text-brand-light transition p-2"><i class="fas fa-times text-xl"></i></button>
+        </div>
+        <div id="thumbnails-container" class="p-4 overflow-y-auto flex-1 grid grid-cols-2 gap-4 auto-rows-max">
+            <!-- Thumbnails JS ile buraya yüklenecek -->
+        </div>
+    </div>
+
+    <!-- Ana İçerik Alanı (Katalog Gövdesi) -->
+    <main class="absolute top-14 sm:top-16 bottom-0 sm:bottom-24 left-0 right-0 flex items-center justify-center overflow-hidden z-10" id="main-container">
+        
+        <!-- Arkaplan Yazısı -->
+        <div class="watermark">HedefAVM</div>
+
+        <!-- Yükleniyor Ekranı -->
+        <div id="loading-screen" class="absolute inset-0 bg-gradient-to-br from-brand-dark via-brand-magenta to-brand-dark flex flex-col items-center justify-center z-30 text-white backdrop-blur-sm">
+            <div class="loader mb-6" id="loader-spinner"></div>
+            <p class="font-bold text-lg sm:text-2xl text-center px-4 tracking-wide" id="loading-text">Katalog Hazırlanıyor...</p>
+            <p class="text-xs sm:text-sm opacity-80 mt-2 text-center px-4 font-light" id="loading-subtext">Lütfen bekleyin</p>
+        </div>
+
+        <!-- Kitap Sarıcı -->
+        <div id="flipbook-wrapper" class="w-[98%] sm:w-[90%] max-w-5xl h-full max-h-[850px] origin-center z-10 flex justify-center items-center relative py-1 sm:py-2">
+            <div id="flipbook" class="flipbook w-full h-full">
+                <!-- Sayfalar JS tarafından buraya eklenecek -->
+            </div>
+            <!-- Zoom Panning Overlay -->
+            <div id="zoom-overlay" class="hidden absolute inset-0 z-50 cursor-grab"></div>
+        </div>
+
+    </main>
+
+    <!-- Zoom Kontrol Paneli -->
+    <div id="zoom-control" class="hidden absolute bottom-20 sm:bottom-24 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 backdrop-blur-lg rounded-full px-4 sm:px-6 py-2 sm:py-3 items-center gap-2 sm:gap-4 z-40 shadow-2xl border border-white border-opacity-10 w-[90%] sm:w-auto justify-center">
+        <i class="fas fa-search-minus text-white opacity-80 text-xs sm:text-sm"></i>
+        <input type="range" id="zoom-slider" min="0.5" max="3" step="0.1" value="1" class="w-24 sm:w-48 cursor-pointer">
+        <i class="fas fa-search-plus text-white opacity-80 text-xs sm:text-sm"></i>
+        <div class="w-px h-6 bg-white opacity-20 mx-1 sm:mx-2"></div>
+        <span id="zoom-val-text" class="text-white font-mono text-xs sm:text-sm w-10 opacity-90 text-center">100%</span>
+        <button id="btn-close-zoom" class="text-white opacity-60 hover:opacity-100 ml-1 sm:ml-2 transition"><i class="fas fa-times"></i></button>
+    </div>
+
+    <!-- Alt Araç Çubuğu (MOBİLDE GİZLENDİ: hidden sm:flex kullanıldı) -->
+    <footer class="hidden sm:flex absolute bottom-3 sm:bottom-6 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-20 backdrop-blur-md rounded-full px-3 py-2 sm:p-3 shadow-xl z-20 justify-between items-center w-[98%] sm:w-[95%] max-w-3xl border border-white border-opacity-10">
+        
+        <!-- Sol İkonlar -->
+        <div class="flex gap-2 sm:gap-6 text-white opacity-90 mr-1 sm:mr-6">
+            <button id="btn-thumbnails" class="hover:text-brand-light transition transform hover:scale-110" title="Küçük Resimler"><i class="fas fa-th-large text-base sm:text-lg"></i></button>
+            <button class="hover:text-brand-light transition transform hover:scale-110" title="İçindekiler"><i class="fas fa-list text-base sm:text-lg"></i></button>
+        </div>
+
+        <!-- Sayfa Kontrolleri (Orta) -->
+        <div class="flex gap-3 sm:gap-8 items-center border-l border-r border-white border-opacity-20 px-2 sm:px-8">
+            <button id="btn-prev" class="text-white hover:text-brand-light disabled:opacity-30 disabled:cursor-not-allowed transition text-lg sm:text-2xl p-1" disabled>
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button id="btn-next" class="text-white hover:text-brand-light disabled:opacity-30 disabled:cursor-not-allowed transition text-lg sm:text-2xl p-1" disabled>
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+
+        <!-- Sağ İkonlar -->
+        <div class="flex gap-2 sm:gap-6 text-white opacity-90 ml-1 sm:ml-6">
+            <button id="btn-zoom" class="hover:text-brand-light transition transform hover:scale-110" title="Yakınlaştır"><i class="fas fa-search-plus text-base sm:text-lg"></i></button>
+            <button id="btn-share" class="hover:text-brand-light transition transform hover:scale-110" title="Paylaş"><i class="fas fa-share-alt text-base sm:text-lg"></i></button>
+            <button id="btn-download" class="hover:text-brand-light transition transform hover:scale-110" title="İndir"><i class="fas fa-download text-base sm:text-lg"></i></button>
+            <button id="btn-fullscreen" class="hover:text-brand-light transition transform hover:scale-110 hidden sm:block" title="Tam Ekran"><i class="fas fa-expand text-base sm:text-lg"></i></button>
+        </div>
+    </footer>
+
+    <!-- Gerekli Kütüphaneler (PDF.js ve PageFlip.js) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/page-flip/dist/js/page-flip.browser.js"></script>
+
+    <script>
+        // PDF.js Worker Tanımlaması
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        /* * STREAMLIT İÇİN ÖZEL YAPILANDIRMA:
+         * Python (Streamlit) kodu, bu "dugunpaketi2026.pdf" metnini otomatik olarak 
+         * kendi oluşturacağı "Base64 PDF Verisi" ile değiştirecek ve çalıştıracaktır.
+         */
+        let DEFAULT_PDF_URL = 'dugunpaketi2026.pdf'; 
+
+        // Değişkenler
+        let pageFlipObj = null;
+        let pdfDoc = null;
+
+        // Panning Değişkenleri ve Dokunmatik Pinch Değişkenleri
+        let currentScale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        let isPanning = false;
+        let startX = 0, startY = 0;
+        let initialPinchDistance = null;
+        let initialScaleAtPinch = 1;
+
+        // DOM Elementleri
+        const loadingScreen = document.getElementById('loading-screen');
+        const flipbookEl = document.getElementById('flipbook');
+        const flipbookWrapper = document.getElementById('flipbook-wrapper');
+        const mainContainer = document.getElementById('main-container');
+        const currentPageEl = document.getElementById('current-page');
+        const totalPagesEl = document.getElementById('total-pages');
+        const zoomOverlay = document.getElementById('zoom-overlay');
+        const loaderSpinner = document.getElementById('loader-spinner');
+        const loadingSubtext = document.getElementById('loading-subtext');
+        
+        // Butonlar
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnFullscreen = document.getElementById('btn-fullscreen');
+        const btnThumbnails = document.getElementById('btn-thumbnails');
+        const btnCloseSidebar = document.getElementById('btn-close-sidebar');
+        const sidebar = document.getElementById('sidebar');
+        const thumbnailsContainer = document.getElementById('thumbnails-container');
+        const btnShare = document.getElementById('btn-share');
+        const btnDownload = document.getElementById('btn-download');
+        
+        // Zoom Elemanları
+        const btnZoom = document.getElementById('btn-zoom');
+        const zoomControl = document.getElementById('zoom-control');
+        const zoomSlider = document.getElementById('zoom-slider');
+        const btnCloseZoom = document.getElementById('btn-close-zoom');
+        const zoomValText = document.getElementById('zoom-val-text');
+
+        // Otomatik başlat
+        window.addEventListener('DOMContentLoaded', () => {
+            if (DEFAULT_PDF_URL) {
+                loadPdfFromUrl(DEFAULT_PDF_URL);
+            }
+        });
+
+        async function loadPdfFromUrl(url) {
+            loadingScreen.classList.remove('hidden');
+            try {
+                const loadingTask = pdfjsLib.getDocument(url);
+                const pdf = await loadingTask.promise;
+                await processPdf(pdf);
+            } catch (error) {
+                console.error("PDF Yükleme hatası:", error);
+                
+                // Sadeleştirilmiş Hata Mesajı
+                loaderSpinner.style.display = 'none';
+                document.getElementById('loading-text').innerHTML = `
+                    <i class="fas fa-exclamation-triangle text-white text-4xl mb-4 block opacity-80"></i>
+                    Katalog Bulunamadı!
+                `;
+                loadingSubtext.innerHTML = `
+                    <div class="bg-black bg-opacity-20 p-4 sm:p-6 rounded-xl mt-4 text-center text-sm max-w-lg mx-auto border border-white border-opacity-10 shadow-lg">
+                        <p class="mb-2 text-white text-base">Dosya yüklenirken veya Streamlit üzerinden okunurken bir sorun oluştu.</p>
+                        <p class="text-white opacity-70 text-sm">Python terminalindeki hata kayıtlarını kontrol edin.</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function processPdf(pdf) {
+            pdfDoc = pdf;
+            const numPages = pdf.numPages;
+            totalPagesEl.textContent = numPages;
+            flipbookEl.innerHTML = ''; 
+            thumbnailsContainer.innerHTML = ''; // Önceki küçük resimleri temizle
+
+            // 1. Sayfadan boyut tespiti
+            const firstPage = await pdf.getPage(1);
+            const viewport = firstPage.getViewport({ scale: 1.5 });
+            const baseWidth = viewport.width;
+            const baseHeight = viewport.height;
+
+            // Sayfaları render et ve küçük resimleri oluştur
+            for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+                document.getElementById('loading-text').textContent = `Sayfalar işleniyor (${pageNum}/${numPages})...`;
+                
+                const page = await pdf.getPage(pageNum);
+                const pageViewport = page.getViewport({ scale: 1.5 });
+                
+                // --- KİTAP SAYFASI ---
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'page';
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d', { alpha: false });
+                canvas.width = pageViewport.width;
+                canvas.height = pageViewport.height;
+
+                await page.render({ canvasContext: context, viewport: pageViewport }).promise;
+                pageDiv.appendChild(canvas);
+                flipbookEl.appendChild(pageDiv);
+
+                // --- KÜÇÜK RESİM (THUMBNAIL) OLUŞTURMA ---
+                const thumbDiv = document.createElement('div');
+                thumbDiv.className = "flex flex-col items-center gap-1 cursor-pointer group";
+                
+                const thumbImg = document.createElement('img');
+                // Canvas'ı resme çeviriyoruz (kalite 0.5 ile performansı artırır)
+                thumbImg.src = canvas.toDataURL('image/jpeg', 0.5); 
+                thumbImg.className = "w-full shadow-md border-2 border-transparent group-hover:border-brand-light transition-all rounded-sm object-contain bg-white h-32";
+                
+                const thumbLabel = document.createElement('span');
+                thumbLabel.className = "text-white text-xs font-semibold opacity-80 group-hover:opacity-100 group-hover:text-brand-light transition-colors";
+                thumbLabel.textContent = `Sayfa ${pageNum}`;
+
+                thumbDiv.appendChild(thumbImg);
+                thumbDiv.appendChild(thumbLabel);
+                
+                // Küçük resme tıklayınca o sayfaya git
+                thumbDiv.onclick = () => {
+                    if (pageFlipObj) {
+                        pageFlipObj.turnToPage(pageNum - 1); 
+                        sidebar.classList.add('-translate-x-full'); // Menüyü kapat
+                    }
+                };
+                thumbnailsContainer.appendChild(thumbDiv);
+            }
+
+            // Kitabı Başlat
+            initPageFlip(baseWidth, baseHeight);
+            
+            loadingScreen.classList.add('hidden');
+            flipbookEl.style.display = 'block';
+            currentPageEl.textContent = '1';
+            btnNext.disabled = false;
+        }
+
+        function initPageFlip(width, height) {
+            if (pageFlipObj) pageFlipObj.destroy();
+
+            pageFlipObj = new St.PageFlip(flipbookEl, {
+                width: width, 
+                height: height, 
+                size: "stretch", // Wrapper sınırlarına göre esneklik sağlar
+                minWidth: 300,
+                maxWidth: 2000,
+                minHeight: 400,
+                maxHeight: 2500,
+                maxShadowOpacity: 0.6,
+                showCover: true, 
+                mobileScrollSupport: true,
+                usePortrait: true 
+            });
+
+            pageFlipObj.loadFromHTML(document.querySelectorAll('.page'));
+
+            pageFlipObj.on('flip', (e) => {
+                let currentPage = e.data + 1;
+                currentPageEl.textContent = currentPage;
+                btnPrev.disabled = (currentPage === 1);
+                btnNext.disabled = (currentPage >= pdfDoc.numPages);
+            });
+        }
+
+        // --- ARAÇ ÇUBUĞU ETKİLEŞİMLERİ ---
+
+        btnPrev.addEventListener('click', () => { if (pageFlipObj) pageFlipObj.flipPrev(); });
+        btnNext.addEventListener('click', () => { if (pageFlipObj) pageFlipObj.flipNext(); });
+
+        // Sidebar (Küçük Resimler) Kontrolleri
+        btnThumbnails.addEventListener('click', () => sidebar.classList.remove('-translate-x-full'));
+        btnCloseSidebar.addEventListener('click', () => sidebar.classList.add('-translate-x-full'));
+
+        // Paylaşım İşlevi (Streamlit Güvenli Mod)
+        btnShare.addEventListener('click', () => {
+            // Streamlit iframe'i içinde olduğumuz için uygulamanın kök URL'sini veya varsayılanı alıyoruz
+            let shareUrl = "https://instagram.com/hedefavm";
+            try { shareUrl = window.top.location.href || shareUrl; } catch(e) {}
+
+            // Eski tarayıcılar ve iframe'ler için güvenli pano kopyalama
+            const tempInput = document.createElement('input');
+            tempInput.value = shareUrl;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            try {
+                document.execCommand('copy');
+                alert("Katalog linki panoya kopyalandı!\n" + shareUrl);
+            } catch (err) {
+                alert("Tarayıcınız kopyalama işlemini desteklemiyor.");
+            }
+            document.body.removeChild(tempInput);
+        });
+
+        // PDF İndirme İşlevi (Streamlit Uyumlu)
+        btnDownload.addEventListener('click', () => {
+            const a = document.createElement('a');
+            a.href = DEFAULT_PDF_URL; // Base64 verisi üzerinden direkt indirir
+            a.download = "HedefAVM_Firsat_Katalogu.pdf";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+
+        // Tam Ekran (Streamlit iframe izinlerine tabidir)
+        btnFullscreen.addEventListener('click', () => {
+            const doc = window.document.documentElement;
+            if (!document.fullscreenElement) {
+                if (doc.requestFullscreen) doc.requestFullscreen();
+                else if (doc.mozRequestFullScreen) doc.mozRequestFullScreen();
+                else if (doc.webkitRequestFullscreen) doc.webkitRequestFullscreen();
+                else if (doc.msRequestFullscreen) doc.msRequestFullscreen();
+                else alert("Tam ekran modu Streamlit tarafından engellenmiş olabilir.");
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        });
+
+        // --- ZOOM (YAKINLAŞTIRMA) İŞLEVLERİ ---
+        
+        btnZoom.addEventListener('click', () => {
+            zoomControl.classList.remove('hidden');
+            zoomControl.classList.add('flex');
+        });
+
+        btnCloseZoom.addEventListener('click', () => {
+            zoomControl.classList.add('hidden');
+            zoomControl.classList.remove('flex');
+            resetZoom();
+        });
+
+        function applyZoomTransform() {
+            flipbookWrapper.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
+        }
+
+        function resetZoom() {
+            zoomSlider.value = 1;
+            currentScale = 1;
+            translateX = 0;
+            translateY = 0;
+            zoomValText.textContent = "100%";
+            zoomOverlay.classList.add('hidden');
+            applyZoomTransform();
+        }
+
+        zoomSlider.addEventListener('input', (e) => {
+            currentScale = parseFloat(e.target.value);
+            zoomValText.textContent = Math.round(currentScale * 100) + "%";
+            
+            if (currentScale > 1) {
+                zoomOverlay.classList.remove('hidden');
+            } else {
+                zoomOverlay.classList.add('hidden');
+                translateX = 0;
+                translateY = 0;
+            }
+            applyZoomTransform();
+        });
+
+        // Mouse ile Kaydırma (Pan)
+        zoomOverlay.addEventListener('mousedown', (e) => {
+            if (currentScale > 1) {
+                isPanning = true;
+                startX = e.clientX - translateX;
+                startY = e.clientY - translateY;
+                zoomOverlay.classList.replace('cursor-grab', 'cursor-grabbing');
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isPanning) {
+                isPanning = false;
+                zoomOverlay.classList.replace('cursor-grabbing', 'cursor-grab');
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isPanning || currentScale <= 1) return;
+            e.preventDefault();
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            applyZoomTransform();
+        });
+
+        // Dokunmatik Ekranlar için Kaydırma (Mobile Pan)
+        zoomOverlay.addEventListener('touchstart', (e) => {
+            if (currentScale > 1 && e.touches.length === 1) {
+                isPanning = true;
+                startX = e.touches[0].clientX - translateX;
+                startY = e.touches[0].clientY - translateY;
+            }
+        });
+
+        window.addEventListener('touchend', () => {
+            isPanning = false;
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isPanning || currentScale <= 1) return;
+            if (e.touches.length === 1) {
+                e.preventDefault();
+                translateX = e.touches[0].clientX - startX;
+                translateY = e.touches[0].clientY - startY;
+                applyZoomTransform();
+            }
+        }, { passive: false });
+
+        // --- MOBİL İKİ PARMAK İLE YAKINLAŞTIRMA (PINCH-TO-ZOOM) ---
+        function getDistance(touches) {
+            return Math.hypot(
+                touches[0].clientX - touches[1].clientX,
+                touches[0].clientY - touches[1].clientY
+            );
+        }
+
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                initialPinchDistance = getDistance(e.touches);
+                initialScaleAtPinch = currentScale;
+                isPanning = false; // Yakınlaştırma yaparken kaydırmayı durdur
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && initialPinchDistance) {
+                e.preventDefault(); // Tarayıcının varsayılan davranışını durdur
+                
+                const currentDistance = getDistance(e.touches);
+                let scaleAmount = currentDistance / initialPinchDistance;
+                
+                // Yakınlaştırma sınırları: Min %50 (0.5), Max %300 (3)
+                currentScale = Math.min(Math.max(initialScaleAtPinch * scaleAmount, 0.5), 3);
+                
+                zoomSlider.value = currentScale;
+                zoomValText.textContent = Math.round(currentScale * 100) + "%";
+                
+                if (currentScale > 1) {
+                    zoomOverlay.classList.remove('hidden');
+                } else {
+                    zoomOverlay.classList.add('hidden');
+                    translateX = 0;
+                    translateY = 0;
+                }
+                applyZoomTransform();
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                initialPinchDistance = null;
+            }
+        });
+
+    </script>
+</body>
+</html>
